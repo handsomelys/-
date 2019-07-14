@@ -1,0 +1,137 @@
+import pandas as pd
+import time
+import csv
+import operator
+
+#data=pd.read_csv('3-Year_Recidivism_for_Offenders_Released_from_Prison_in_Iowa.csv')
+#pd.set_option('display.width',None)
+#print(data)
+'''def calEnt(data):
+    numentries = len(data)
+    labelcount = {}
+    for featvec in data:
+        currentlabel = featvec[-1]
+        if currentlabel not in labelcount.keys():
+            labelcount[currentlabel] = 0
+        labelcount[currentlabel] += 1
+    
+    Ent = 0.0
+    for key in labelcount:
+        prob = float(labelcount[key])/numentries
+        Ent -= prob*math.log(prob,2)
+    return Ent
+'''
+
+def basic_set(data):
+    #划分条件属性和决策属性，各自划分等价类
+    basic = {}
+    for i in data.drop_duplicates().values.tolist():
+        basic[str(i)]=[]
+        for j,k in enumerate(data.values.tolist()):
+            if k==i:
+                basic[str(i)].append(j)
+    return basic
+
+def rough_set(data):
+    #data = data.dropna(axis=1,how='any')
+    x_data = data.drop(['Recidivism - Return to Prison','Days to Recidivism','New Conviction Offense Classification','New Conviction Offense Type','New Conviction Offense Sub Type','Recidivism Type'],axis=1)
+    y_data = data.loc[:,'Recidivism - Return to Prison']
+    #决策属性划分
+    y_basic_set = sorted([v for k,v in basic_set(y_data).items()])
+    #条件属性划分
+    x_basic_set = sorted([v for k,v in basic_set(x_data).items()])
+    deci = []
+    for i in y_basic_set:   #取出决属性里的等价类的第一个元素
+        deci.append(i[0])
+    att = []
+    for i in x_basic_set:   #取出条件属性里的等价类的第一个元素
+        att.append(i[0])
+    '''print(x_data)
+    print(y_data)'''
+    '''for i in x_data.index:
+        print(x_data.loc[i].values[8])'''
+    cnty=0
+    cntn=0
+    atty=[]
+    attn=[]
+    miu = [] #存放概率μ
+    n=1
+    '''for i in att:
+        if x_data.loc[i].values[8]=='Yes':
+            cnty = cnty + 1
+        elif x_data.loc[i].values[8]=='No':
+            cntn = cntn + 1'''
+    for i in x_basic_set:
+        temp_len = len(i)
+        for j in i:
+            if y_data[j]=='Yes':
+                cnty = cnty + 1
+            else:
+                cntn = cntn + 1
+        #print(x_data.loc[0].values[8])
+        n = n + 1
+        uy = cnty/temp_len
+        un = cntn/temp_len
+        cnty=0
+        cntn=0
+        tempgailv = []
+        tempgailv.append(uy)
+        tempgailv.append(un)
+        miu.append(tempgailv)
+        '''for k in att:
+            uy = float(cnty/temp_len)
+            un = float(cntn/temp_len)
+            #这部分要用列表存放这两个概率的元组
+            miu[k]=[uy,un]'''
+    mc = {}
+    index = 0
+    #构建mc字典，找出各个等价类的max概率所指的决策属性
+    for i in miu:
+        if i[0]>i[1]:
+            mc[att[index]]='Yes'
+            index = index + 1
+        else :
+            mc[att[index]]='No'
+            index = index + 1
+    #mc字典中 key对应的是U论域  value对应的是g决策属性 即yes or no
+    attribute = []
+    for i in x_data:
+        attribute.append(i) #将各个属性放在一个列表里 进行属性约简
+    #print(attribute)
+    circle_time = len(attribute)
+    #将已经得出的满足最大分布的协调决策信息系统 进行属性相对约简
+    
+    t = []
+    l = [i for i in range(1000)]
+    final_attribute = []
+    for i in l:
+        if i not in att:
+            t.append(i)
+    reduce_x_data = x_data.drop(index = t)
+    reduce_equivlent_set = sorted([v for k,v in basic_set(reduce_x_data).items()])
+    
+    for i in range(0,circle_time):
+        temp_x_data = reduce_x_data.drop(attribute[i],axis=1)
+        temp_basic_set = sorted([v for k,v in basic_set(temp_x_data).items()])
+        if operator.eq(temp_basic_set,reduce_equivlent_set) == False:
+            final_attribute.append(attribute[i])
+    
+    print("最终约简得出的约简条件属性为: ")
+    for i in final_attribute:
+        print(i)
+   
+def main():
+    #data = pd.read_csv(filepath_or_buffer='3-Year_Recidivism_for_Offenders_Released_from_Prison_in_Iowa.csv')
+    #basic_set(data)
+    #print(data)
+    #data = pd.read_csv('3-Year_Recidivism_for_Offenders_Released_from_Prison_in_Iowa.csv',chunksize=1000000,header=None,sep=';')
+    #for i in data:
+    #    print(i)
+    csv_file='3-Year_Recidivism_for_Offenders_Released_from_Prison_in_Iowa.csv'
+    csv_data=pd.read_csv(csv_file,nrows=1000,low_memory=False)
+    data = pd.DataFrame(csv_data)
+    #basic_set(data)
+    rough_set(data)
+
+if __name__ == '__main__':
+    main()
