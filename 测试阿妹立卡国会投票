@@ -1,0 +1,191 @@
+import pandas as pd
+import time
+import csv
+import operator
+
+#data=pd.read_csv('3-Year_Recidivism_for_Offenders_Released_from_Prison_in_Iowa.csv')
+#pd.set_option('display.width',None)
+#print(data)
+'''def calEnt(data):
+    numentries = len(data)
+    labelcount = {}
+    for featvec in data:
+        currentlabel = featvec[-1]
+        if currentlabel not in labelcount.keys():
+            labelcount[currentlabel] = 0
+        labelcount[currentlabel] += 1
+    
+    Ent = 0.0
+    for key in labelcount:
+        prob = float(labelcount[key])/numentries
+        Ent -= prob*math.log(prob,2)
+    return Ent
+'''
+def max_list(lt):
+    temp = 0
+    for i in lt:
+        if lt.count(i) > temp:
+            max_str = i
+            temp = lt.count(i)
+    return max_str
+
+def basic_set(data):
+    #this part has no problem
+    #划分条件属性和决策属性，各自划分等价类
+    basic = {}
+    for i in data.drop_duplicates().values.tolist():
+        basic[str(i)]=[]
+        for j,k in enumerate(data.values.tolist()):
+            if k==i:
+                basic[str(i)].append(j)
+    return basic
+def rough_set(data):
+    #data = data.dropna(axis=1,how='any')
+    x_data = data.drop(['name','result'],axis=1)
+    y_data = data.loc[:,'result']
+    #决策属性划分
+    y_basic_set = sorted([v for k,v in basic_set(y_data).items()])
+    #条件属性划分
+    x_basic_set = sorted([v for k,v in basic_set(x_data).items()])
+    deci = []
+    #print(x_basic_set)
+    for i in y_basic_set:   #取出决策属性里的等价类的第一个元素
+        deci.append(i[0])
+    att = []
+    for i in x_basic_set:   #取出条件属性里的等价类的第一个元素
+        att.append(i[0])
+    cnt0=0
+    cnt1=0
+    cnt2=0
+    atty=[]
+    attn=[]
+    miu = [] #存放概率μ
+    n=1
+    print(x_basic_set)
+    for i in x_basic_set:
+        #print(i)
+        temp_len = len(i)
+        for j in i:
+            #print(y_data[j])
+            #print('---------')
+            #print(j)
+            if y_data[j]=='republican':
+                cnt0 = cnt0 + 1
+            elif y_data[j]=='democrat':
+                cnt1 = cnt1 + 1
+            else:
+                cnt2 = cnt2 + 1
+        n = n + 1
+        u0 = cnt0/temp_len  #存放条件概率的分布
+        u1 = cnt1/temp_len
+        u2 = cnt2/temp_len
+        cnt0=0  #再次赋值0 循环
+        cnt1=0
+        cnt2=0
+        tempgailv = []
+        tempgailv.append(u0)
+        tempgailv.append(u1)
+        #tempgailv.append(u2)
+        miu.append(tempgailv)
+    print('miu')
+    print(miu)    
+    mc = {}
+    index = 0
+    #构建mc字典，找出各个等价类的max概率所指的决策属性
+    for i in miu:
+        x = max(i[0],i[1])
+        if x == i[0]:
+            mc[att[index]] = 'republican'
+            index = index + 1 
+        elif x == i[1]:
+            mc[att[index]] = 'democrat'
+            index = index + 1
+        else :
+            mc[att[index]] = 2
+            index = index + 1
+    print(mc)
+    #mc字典中 key对应的是U论域  value对应的是g决策属性 即yes or no
+    attribute = []
+    for i in x_data:
+        attribute.append(i) #将各个属性放在一个列表里 进行属性约简
+    #print(attribute)
+    circle_time = len(attribute)
+    #将已经得出的满足最大分布的协调决策信息系统 进行属性相对约简
+    
+    t = []
+    l = [i for i in range(435)]  #减去约简完的协调信息集
+    final_attribute = []
+    for i in l:
+        if i not in att:
+            t.append(i)
+    reduce_x_data = x_data.drop(index = t)
+    #reduce_equivlent_set = sorted([v for k,v in basic_set(reduce_x_data).items()])  
+    i = 0
+    reduce_able_attribute = []  #存放已被约简的条件属性
+
+    key = list(mc.values()) #将字典里的值转换为list  方便按索引遍历
+    print('key')
+    print(key)
+    while i < circle_time: 
+        reduce_equivlent_set = sorted([v for k,v in basic_set(reduce_x_data).items()])  #未drop条件属性之前的U/C集的条件属性再分类
+        temp_x_data = reduce_x_data.drop(attribute[i],axis=1)   #循环drop条件属性
+        temp_basic_set = sorted([v for k,v in basic_set(temp_x_data).items()])  #drop条件属性的U/C集的条件属性再分类
+        if operator.eq(temp_basic_set,reduce_equivlent_set) == True:    #如果U/C == U/C-a
+            print('条件'+attribute[i]+'满足UC，本次可约简属性为:'+attribute[i]) #直接约去
+            reduce_able_attribute.append(attribute[i])
+            reduce_x_data.drop(attribute[i],axis=1,inplace=True)
+            attribute.pop(i)
+            i = 0
+            circle_time = circle_time - 1
+        else:
+            print('条件'+attribute[i]+'不满足UC，进入下一个判断:')  #如果U/C和U/C-a不等价 进入下一个判断条件
+            single_list = []    #存放每个等价类的概率分布 判断是不是单点分布
+            for j in temp_basic_set:      
+                tmp = []
+                for k in j:
+                    tmp.append(key[k])
+                single_list.append(tmp) #single_list里放的就是条件属性对应的决策属性
+            flag = 1    #标识符号 如果flag=1 则出现可约简属性
+            for j in range(0,len(single_list)):
+                if flag==0:
+                    break
+                t_l = single_list[j]
+                print('t_l')
+                print(t_l)
+                for k in range(0,len(t_l)): #判断决策属性里的值是否一致，即是否单点分布
+                    if t_l[0]!=t_l[k]:
+                        flag=0
+                        break
+            if flag==0:
+                #非单点分布
+                print('该属性：'+attribute[i]+'不满足单点分布,为不可省条件属性')    #如果不是 则进入下一个循环
+                i = i + 1
+                
+            elif flag==1:   #如果是 直接约简 i重归0
+                print(attribute)
+                print(i)
+                print('该属性：'+attribute[i]+'为可约简条件属性')
+                reduce_able_attribute.append(attribute[i])
+                reduce_x_data.drop(attribute[i],axis=1,inplace=True)
+                print('本次可约简属性为:'+attribute[i]) 
+                attribute.pop(i)
+                i = 0
+                circle_time = circle_time - 1
+        #寻找单点分布
+    print("最终约简得出的约简条件属性为: ")
+    print(attribute)
+    print(len(attribute))
+   
+def main():
+    
+    time1 = time.time()
+    csv_file='vote.csv'
+    csv_data=pd.read_csv(csv_file)
+    data = pd.DataFrame(csv_data)
+    #basic_set(data)
+    rough_set(data)
+    time2 = time.time()
+    print('time:')
+    print(time2-time1)
+if __name__ == '__main__':
+    main()
