@@ -1,0 +1,108 @@
+# -*- coding: utf-8 -*-
+import numpy as np
+import random
+from collections import Counter
+from sklearn.datasets import load_iris
+import pandas as pd
+
+def Euclidean_Distance(x1,x2):
+    tmp = np.sqrt(sum((x1-x2)**2))
+    return tmp
+
+def Sigma(x,y):
+    return len(x) - sum(x==y)
+
+def init_protos(data,k):
+    m,n = data.shape
+    
+    num = random.sample(range(m),k)
+    
+    o = []
+    c = []
+    for i in range(n):
+        try:
+            if isinstance(data[0,i],int) or isinstance(data[0,i],float):
+                o.append(i)
+            elif isinstance(data[0,i],str):
+                c.append(i)
+            else:
+                raise ValueError("the %d column of data is not a number or a str column" % i)
+        except TypeError as e:
+            print(e)
+    o_data = data[:,o]
+    c_data = data[:,c]
+    o_protos = o_data[num,:]
+    c_protos = c_data[num,:]
+
+    return o,c,o_data,c_data,o_protos,c_protos
+
+def Kprototypes(data,k,max_iters = 10,gamma = 0.5):
+    m,n = data.shape
+    o,c,o_data,c_data,o_protos,c_protos = init_protos(data,k)
+    cluster = None
+    clustership = []
+    clustercount = {}
+    sumofcluster = {}
+    freqIncluster = {}
+    for i in range(m):
+        mindistance = float('inf')  #正无穷
+        for j in range(k):
+            distance = Euclidean_Distance(o_data[i,:],o_protos[j,:]) + gamma * Sigma(c_data[i,:],c_protos[j,:])
+            if distance < mindistance:  #选择排序 找出最小的distance
+                mindistance = distance
+                cluster = j
+        clustership.append(cluster) #样本类别
+        if clustercount.get(cluster) == None:
+            clustercount[cluster] = 1
+        else :
+            clustercount[cluster] = 1 + clustercount[cluster]   #计数 该类属性个数+1
+        for j in range(len(o)):
+            if sumofcluster.get(cluster) == None:
+                sumofcluster[cluster] = [o_data[i,j]] + [0]*(len(o)-1)
+            else :
+                sumofcluster[cluster][j] = o_data[i,j] + sumofcluster[cluster][j]
+            o_protos[cluster,j] = sumofcluster[cluster][j]/clustercount[cluster]
+
+        for j in range(len(c)):
+            if freqIncluster.get(cluster) == None:
+                freqIncluster[cluster] = [Counter(c_data[i,j])] + [Counter()]*(len(c)-1)
+            else:
+                freqIncluster[cluster][j] = Counter(c_data[i,j]) + freqIncluster[cluster][j]
+            c_protos[cluster,j] = freqIncluster[cluster][j].most_common()[0][0]
+    for t in range(max_iters):
+        for i in range(m):
+            mindistance = float('inf')
+            for j in range(k):
+                distance = Euclidean_Distance(o_data[i,:],o_protos[j,:]) + gamma * Sigma(c_data[i,:],c_protos[j,:])
+                if distance < mindistance:
+                    mindistance = distance
+                    cluster = j
+            if clustership[i] != cluster:
+                oldcluster = clustership[i]
+                clustership[i] = cluster
+                clustercount[cluster] = 1 + clustercount[cluster]
+                clustercount[oldcluster] = clustercount[oldcluster] - 1
+                
+                for j in range(len(o)):
+                    sumofcluster[cluster][j] = o_data[i,j] + sumofcluster[cluster][j]
+                    sumofcluster[oldcluster][j] = sumofcluster[oldcluster][j] - o_data[i,j]
+                    o_protos[cluster,j] = sumofcluster[cluster][j] / clustercount[cluster]
+                    o_protos[oldcluster,j] = sumofcluster[oldcluster][j] / clustercount[oldcluster]
+
+                for j in range(len(c)):
+                    freqIncluster[cluster][j] = Counter(c_data[i,j]) + freqIncluster[cluster][j]
+                    freqIncluster[oldcluster][j] = freqIncluster[oldcluster][j] - Counter(c_data[i,j])
+                    c_protos[cluster,j] = freqIncluster[cluster][j].most_common()[0][0]
+                    c_protos[oldcluster,j] = freqIncluster[oldcluster][j].most_common()[0][0]
+    return clustership
+    
+def main():
+    iris = load_iris()
+    cluster = Kprototypes(data=iris.data,k=3,max_iters=30)
+    print(cluster)
+    s = pd.DataFrame(np.concatenate([iris.data, np.array([cluster]).T], axis=1))
+    s.to_csv('s.csv')     
+     
+if __name__ == '__main__':
+    main()
+
